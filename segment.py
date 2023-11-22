@@ -52,6 +52,9 @@ class Segment:
   def fin_ack():
     return Segment(SegmentFlags(False, True, True), 0, 0, b"", b"")
   
+  @staticmethod
+  def payload(seq_num: int, payload: bytes):
+    return Segment(SegmentFlags(False, False, False), seq_num, 0, payload)
 
   @staticmethod
   def from_bytes(data: bytes):

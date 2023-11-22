@@ -24,19 +24,19 @@ class ConnectionSend:
     self.port = port
     self.remote_ip = remote_ip
     self.remote_port = remote_port
+    # same as sequence base
     self.seq_num = 0
-    self.sequence_base = 0
     self.window_size = 5
     self.is_connected = False
 
   @property
   def sequence_max(self):
-    return increment_seqnum(self.sequence_base + self.window_size + 1)
+    return increment_seqnum(self.seq_num + self.window_size + 1)
   
   def is_valid_ack(self, ack_num: int):
-    if (self.sequence_max < self.sequence_base):
-      return self.sequence_base <= ack_num or ack_num < self.sequence_max
-    return self.sequence_base <= ack_num < self.sequence_max
+    if (self.sequence_max < self.seq_num):
+      return self.seq_num <= ack_num - 1 or ack_num - 1 < self.sequence_max
+    return self.seq_num <= ack_num - 1 < self.sequence_max
     
 
 class ConnectionReceive:

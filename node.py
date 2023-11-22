@@ -12,33 +12,52 @@ class MessageInfo:
 
 
 class Node(ABC):
-  connections: typing.Dict[(str, int), Connection] = {}
-
   def __init__(self, ip: str, port: int) -> None:
     self.ip = ip
     self.port = port
     self.__socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
+    self.__socket.bind((self.ip, self.port))
+    self.connections: typing.Dict[(str, int), Connection] = {}
+    self.__handler = None
+    self.__on_close = None
+    self.__on_connect = None
 
   def send(self, ip_remote: str, port_remote: int, segment: Segment):
     self.__socket.sendto(segment.pack_headers() + segment.payload, (ip_remote, port_remote))
 
-  def register_handler(self, handler: typing.Callable[[MessageInfo]], on_close: typing.Callable[[MessageInfo]]):
+  def handshake(self, ip_remote: str, port_remote: int):
+    new_connection = Connection(self.ip, self.port, ip_remote, port_remote)
+    new_connection.send.seq_num = generate_seqnum()
+    self.connections[(ip_remote, port_remote)] = new_connection
+    self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
+    while not new_connection.send.is_connected:
+      try:
+        self.listen(2)
+      except socket.timeout:
+        self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
+    return new_connection
+
+  def register_handler(self, handler: typing.Callable[[MessageInfo], None]):
     self.__handler = handler
+  
+  def register_on_close(self, on_close: typing.Callable[[MessageInfo], None]):
     self.__on_close = on_close
 
-  def listen(self):
-    self.__socket.bind((self.ip, self.port))
-    self.__socket.settimeout(10)
+  def register_on_connect(self, on_connect: typing.Callable[[MessageInfo], None]):
+    self.__on_connect = on_connect
 
-    while True:
-      data, addr = self.__socket.recvfrom(32768)
-      try:
-        segment: Segment = Segment.from_bytes(data)
-        self.__on_receive(addr, segment)
-      except SegmentError as e:
-        print(e)
-        continue
+  def listen(self, timeout: typing.Optional[float] = None):
+    try:
+      addr, segment = self.listen_base(timeout)
+      self.__on_receive(addr, segment)
+    except SegmentError as e:
+      print(e)
+
+  def listen_base(self, timeout: typing.Optional[float] = None):
+    self.__socket.settimeout(timeout)
+    data, addr = self.__socket.recvfrom(32768)
+    segment: Segment = Segment.from_bytes(data)
+    return (addr, segment)
 
   
   def __on_receive(self, addr: tuple[str, int], segment: Segment):
@@ -67,7 +86,11 @@ class Node(ABC):
       
       # Send ack for the syn
       connection.receive.seq_num = increment_seqnum(segment.seq_num)
+      connection.receive.is_connected = True
       self.send(addr[0], addr[1], Segment.ack(connection.receive.seq_num))
+
+      if self.__on_connect is not None:
+        self.__on_connect(MessageInfo(addr[0], addr[1], segment))
 
     elif segment.flags.fin and not segment.flags.ack:
       # cek
@@ -75,9 +98,8 @@ class Node(ABC):
         return
 
       # receive connection set to false
-
       connection.receive.is_connected = False
-      self.__on_close(MessageInfo(addr[0], addr[1], segment))
+      
       # send fin ack
       self.send(addr[0], addr[1], Segment.fin_ack())
     
@@ -85,9 +107,11 @@ class Node(ABC):
     elif segment.flags.fin and segment.flags.ack:
       if connection is None or not connection.send.is_connected:
         return
-      self.__on_close(MessageInfo(addr[0], addr[1], segment))
+      connection.send.is_connected = False
       self.connections.pop((addr[0], addr[1]))
       self.send(addr[0], addr[1], Segment.ack(0))
+      if self.__on_close is not None:
+        self.__on_close(MessageInfo(addr[0], addr[1], segment))
   
     # ack only, server receive final ack
     elif segment.flags.ack:
@@ -96,6 +120,8 @@ class Node(ABC):
       # ack for the fin
       if not connection.receive.is_connected:
         self.connections.pop((addr[0], addr[1]))
+        if self.__on_close is not None:
+          self.__on_close(MessageInfo(addr[0], addr[1], segment))
         return
       # If not connected
       if not connection.send.is_connected:
@@ -104,6 +130,8 @@ class Node(ABC):
           return
         connection.send.is_connected = True
         connection.send.seq_num = segment.ack_num
+        if self.__on_connect is not None:
+          self.__on_connect(MessageInfo(addr[0], addr[1], segment))
       else:
         # If connected, set the seq num to the ack num
         if connection.send.is_valid_ack(segment.ack_num):
@@ -113,13 +141,24 @@ class Node(ABC):
     else:
       if connection is None or not connection.receive.is_connected:
         return
-      
-      self.__handler(MessageInfo(addr[0], addr[1], segment))
-
-  
+      if self.__handler is not None:
+        connection.receive.seq_num = increment_seqnum(segment.seq_num)
+        self.send(addr[0], addr[1], Segment.ack(connection.receive.seq_num))
+        self.__handler(MessageInfo(addr[0], addr[1], segment))
   
   def close(self):
     self.__socket.close()
+
+  def end_connection(self, ip: str, port: int):
+    connection = self.connections.get((ip, port))
+    if connection is None:
+      return
+    self.send(ip, port, Segment.fin())
+    while self.connections.get((ip, port)) is not None:
+      try:
+        self.listen(2)
+      except socket.timeout:
+        self.send(ip, port, Segment.fin())
 
   @abstractmethod
   def run():
