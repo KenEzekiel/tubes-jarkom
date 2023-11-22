@@ -31,7 +31,7 @@ class Client(Node):
 
   def handle_message(self, message_info: MessageInfo):
     self.data.append(message_info.segment.payload)
-    print(f"[Segment SEQ={message_info.segment.seq_num}] Received")
+    print(f"[Segment SEQ={message_info.segment.seq_num}] Received, Ack sent")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

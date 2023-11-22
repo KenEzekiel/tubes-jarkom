@@ -66,9 +66,7 @@ class Segment:
     seq_num, ack_num, flags, _, checksum = unpack("!IIBBH", data[:12])
     payload = data[12:] if len(data) > 12 else b""
     segment = Segment(SegmentFlags.from_byte(flags), seq_num, ack_num, payload, checksum)
-    if not segment.is_valid_checksum():
-      raise SegmentError("invalid checksum")
-    return segment
+    return segment, segment.is_valid_checksum()
   
 
   def __calculate_checksum(self, is_recv = False):
