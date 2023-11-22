@@ -1,14 +1,23 @@
-from connection import Connection, MessageInfo
+from node import Connection, MessageInfo, Node
+
+
+class Server(Node):
+  def __init__(self, connection: Connection) -> None:
+    super().__init__(connection)
+    self.connection.register_handler(self.handle_message)
+  
+  def run(self):
+    self.connection.listen()
+
+  def handle_message(self, message: MessageInfo):
+    print("==========================")
+    print("Received message from ", message.ip, message.port)
+    print(message.segment)
+    print("==========================")
 
 HOST = "127.0.0.1"
 PORT = 65432
 
 connection = Connection(HOST, PORT)
-def handler(message: MessageInfo):
-  print("==========================")
-  print("Received message from ", message.ip, message.port)
-  print(message.segment)
-  print("==========================")
-
-connection.register_handler(handler=handler)
-connection.listen()
+server = Server(connection)
+server.run()

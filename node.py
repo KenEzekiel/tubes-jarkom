@@ -1,6 +1,7 @@
 import socket
 from segment import Segment, SegmentError
 import typing
+from abc import abstractmethod, ABC
 
 
 class MessageInfo:
@@ -40,3 +41,14 @@ class Connection:
     self.__socket.close()
 
   
+class Node(ABC):
+  def __init__(self, connection: Connection) -> None:
+    self.connection = connection
+  
+  @abstractmethod
+  def run():
+    pass
+
+  @abstractmethod
+  def handle_message(segment: Segment):
+    pass
