@@ -1,3 +1,4 @@
+import argparse
 from node import Node, MessageInfo
 from segment import Segment, SegmentFlags
 
@@ -18,7 +19,7 @@ class Client(Node):
     self.send(self.server_ip, self.server_port, Segment.syn(0))
 
     # listening to handshake
-    while self.get_server() is None or self.get_server().receive.is_connected is False:
+    while self.get_server() is None:
       self.listen()
       
     # receive files
@@ -30,14 +31,19 @@ class Client(Node):
 
   def handle_message(self, message_info: MessageInfo):
     self.data.append(message_info.segment.payload)
-    
+    print(f"[Segment SEQ={message_info.segment.seq_num}] Received")
 
-HOST = "127.0.0.1"
-PORT = 65433
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("client_port", type=int)
+    parser.add_argument("server_port", type=int)
+    parser.add_argument("output_path", type=str)
+    args = parser.parse_args()
 
-SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 65432
+    client = Client('127.0.0.1', args.client_port, "127.0.0.1", args.server_port)
+    output_path = args.output_path
+    client.run()
 
-client = Client(HOST, PORT, SERVER_HOST, SERVER_PORT)
-client.run()
-print(client.data)
+    with open(output_path, "wb") as f:
+      for data in client.data:
+        f.write(data)

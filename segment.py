@@ -1,6 +1,9 @@
 from struct import pack, unpack
 from typing import Optional
 
+
+MAX_PAYLOAD = 32756
+
 class SegmentError(Exception):
   def __init__(self, message: str) -> None:
     super().__init__(message)

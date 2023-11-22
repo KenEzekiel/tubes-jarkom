@@ -18,6 +18,11 @@ def increment_seqnum(seqnum: int, increment: typing.Optional[int] = None):
   return seqnum
     
 
+def get_seqnum_diff(seqnum_low: int, seqnum_high: int):
+  if seqnum_low > seqnum_high:
+    return seqnum_low - seqnum_high
+  return seqnum_high - seqnum_low
+
 class ConnectionSend:
   def __init__(self, ip: str, port: int, remote_ip: str, remote_port: int) -> None:
     self.ip = ip

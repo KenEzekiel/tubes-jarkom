@@ -1,6 +1,10 @@
+import argparse
+import math
+import os
 import socket
+from connection import get_seqnum_diff, increment_seqnum
 from node import MessageInfo, Node
-from segment import Segment, SegmentError
+from segment import MAX_PAYLOAD, Segment, SegmentError
 
 
 class Server(Node):
@@ -19,7 +23,6 @@ class Server(Node):
         isListenMore = input("Listen more? (y/n)")
         if isListenMore == "n":
             break
-    self.broadcast()
 
   def listen_broadcast(self):
     addr, segment = self.listen_base(30)
@@ -30,18 +33,33 @@ class Server(Node):
     except SegmentError as e:
       print(e)
 
-  def broadcast(self):
+  def broadcast(self, file_path: str):
+    file = open(file_path, "rb")
+    filesize = os.path.getsize(file_path)
+    max_segment = math.ceil(filesize / MAX_PAYLOAD)
+
     for addr in self.listen_addresses:
       conn = self.handshake(addr[0], addr[1])
-      seq_num = conn.send.seq_num
-      self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num, b"Hello World"))
-      while conn.send.seq_num == seq_num:
-        try:
-          self.listen(30)
-        except socket.timeout:
-          print("Timeout")
-          break
+      sent_segment = 0
+      while sent_segment < max_segment:
+        to_send = min(conn.send.window_size, max_segment - sent_segment)
+        for i in range(to_send):
+          file.seek((sent_segment + i) * MAX_PAYLOAD)
+          print(f"[Segment SEQ={conn.send.seq_num + i}] Sent")
+          self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num + i, file.read(MAX_PAYLOAD)))
+
+        start_seq_num = conn.send.seq_num
+        start_sent_segment = sent_segment
+
+        for i in range(to_send):
+          self.listen(5)
+          diff = get_seqnum_diff(start_seq_num, conn.send.seq_num)
+          if start_sent_segment + diff > sent_segment:
+            sent_segment = start_sent_segment + diff
+          if diff == to_send:
+            break
       self.end_connection(conn.send.remote_ip, conn.send.remote_port)
+      print(f"[!] Finished sending to {addr[0]}:{addr[1]}")
 
   def handle_message(self, message: MessageInfo):
     print("==========================")
@@ -49,7 +67,14 @@ class Server(Node):
     print(message.segment)
     print("==========================")
 
-HOST = "127.0.0.1"
-PORT = 65432
-server = Server(HOST, PORT)
-server.run()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("port", type=int)
+    parser.add_argument("input_path", type=str)
+    args = parser.parse_args()
+
+    server = Server('127.0.0.1', args.port)
+    input_path = args.input_path
+    
+    server.run()
+    server.broadcast(input_path)
