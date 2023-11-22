@@ -37,12 +37,12 @@ class Segment:
     return Segment(SegmentFlags(True, False, False), seq_num, 0, b"", b"")
   
   @staticmethod
-  def ack(seq_num: int, ack_num: int):
-    return Segment(SegmentFlags(False, True, False), seq_num, ack_num, b"", b"")
+  def ack(ack_num: int):
+    return Segment(SegmentFlags(False, True, False), 0, ack_num, b"", b"")
   
   @staticmethod
-  def syn_ack():
-    return Segment(SegmentFlags(True, True, False), 0, 0, b"", b"")
+  def syn_ack(seq_num: int, ack_num: int):
+    return Segment(SegmentFlags(True, True, False), seq_num, ack_num, b"", b"")
 
   @staticmethod
   def fin():
