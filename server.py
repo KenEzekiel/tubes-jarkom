@@ -1,9 +1,9 @@
-from node import Connection, MessageInfo, Node
+from node import MessageInfo, Node
 
 
 class Server(Node):
-  def __init__(self, connection: Connection) -> None:
-    super().__init__(connection)
+  def __init__(self, ip: str, port: int) -> None:
+    super().__init__(ip, port)
     self.connection.register_handler(self.handle_message)
   
   def run(self):
@@ -17,7 +17,5 @@ class Server(Node):
 
 HOST = "127.0.0.1"
 PORT = 65432
-
-connection = Connection(HOST, PORT)
-server = Server(connection)
+server = Server(HOST, PORT)
 server.run()

@@ -11,7 +11,7 @@ class MessageInfo:
     self.segment = segment
 
 
-class Connection:
+class Node(ABC):
   def __init__(self, ip: str, port: int) -> None:
     self.ip = ip
     self.port = port
@@ -40,11 +40,6 @@ class Connection:
   def close(self):
     self.__socket.close()
 
-  
-class Node(ABC):
-  def __init__(self, connection: Connection) -> None:
-    self.connection = connection
-  
   @abstractmethod
   def run():
     pass
@@ -52,3 +47,5 @@ class Node(ABC):
   @abstractmethod
   def handle_message(segment: Segment):
     pass
+  
+  
