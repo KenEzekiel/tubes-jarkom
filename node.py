@@ -32,6 +32,7 @@ class Node(ABC):
     new_connection = Connection(self.ip, self.port, ip_remote, port_remote)
     new_connection.send.seq_num = generate_seqnum()
     self.connections[(ip_remote, port_remote)] = new_connection
+    print(f"[Handshake] Sending SYN to {ip_remote}:{port_remote}")
     self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
     # wait for syn ack
     is_ack = False
@@ -94,8 +95,9 @@ class Node(ABC):
       # send ack
       self.connections[(addr[0], addr[1])] = new_connection
       self.send(addr[0], addr[1], Segment.syn_ack(new_connection.send.seq_num, new_connection.receive.seq_num))
-
+      print(f"[Handshake] Received SYN from {addr[0]}:{addr[1]}\n[Handshake] sending SYN ACK with SEQNUM [{new_connection.send.seq_num}] and ACK NUM [{new_connection.receive.seq_num}]")
       # wait for ack
+      print(f"[Handshake] Waiting for ACK with ACK NUM [{increment_seqnum(new_connection.receive.seq_num)}]")
       is_ack = False
       try_num = 1
       while not is_ack and try_num < 2:
@@ -120,6 +122,7 @@ class Node(ABC):
     elif segment.flags.syn and segment.flags.ack:
       connection = self.connections.get((addr[0], addr[1]))
       self.send(addr[0], addr[1], Segment.ack(increment_seqnum(segment.seq_num)))
+      print(f"[Handshake] Received SYN ACK from {addr[0]}:{addr[1]}\n[Handshake] Sending ACK with ACK NUM [{increment_seqnum(segment.seq_num)}]")
       # If connection is not registered, or send connection is connected, or not the correct ack, continue
       if connection is None or connection.send.is_connected or segment.ack_num != increment_seqnum(connection.send.seq_num):
         return
@@ -136,6 +139,7 @@ class Node(ABC):
         self.__on_connect(MessageInfo(addr[0], addr[1], segment))
 
     elif segment.flags.fin and not segment.flags.ack:
+      print(f"[~] Received FIN")
       # cek
       if connection is None or not connection.receive.is_connected:
         return
@@ -145,7 +149,7 @@ class Node(ABC):
       
       # send fin ack
       self.send(addr[0], addr[1], Segment.fin_ack())
-      
+      print(f"[~] Sending FIN ACK, waiting for ACK...")
       # wait for ack
       is_ack = False
       try_num = 1
@@ -177,6 +181,7 @@ class Node(ABC):
   
     # ack only, server receive final ack
     elif segment.flags.ack:
+      print(f"[Handshake] Received ACK with ACK NUM [{segment.ack_num}]")
       if connection is None:  
         return
       # ack for the fin
