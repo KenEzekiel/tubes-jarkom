@@ -1,3 +1,4 @@
+import json
 from struct import pack, unpack
 from typing import Optional
 
@@ -58,6 +59,14 @@ class Segment:
   @staticmethod
   def payload(seq_num: int, payload: bytes):
     return Segment(SegmentFlags(False, False, False), seq_num, 0, payload)
+  
+  @staticmethod
+  def metadata(seq_num: int, metadata: dict):
+    payload = json.dumps(metadata)
+    payload = payload.encode()
+    seg = Segment(SegmentFlags(False, False, False), seq_num, 0, payload.rjust(len(payload)+12, b'\0'))
+    print(str(seg))
+    return seg
 
   @staticmethod
   def from_bytes(data: bytes):

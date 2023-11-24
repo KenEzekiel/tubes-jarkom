@@ -3,7 +3,7 @@ import math
 import os
 import socket
 import typing
-from connection import get_seqnum_diff
+from connection import get_seqnum_diff, increment_seqnum
 from node import MessageInfo, Node
 from segment import MAX_PAYLOAD, Segment, SegmentError
 import threading
@@ -28,15 +28,33 @@ class PausableBroadcastThread(threading.Thread):
       addr = self.addr
       conn = server.handshake(addr[0], addr[1])
       sent_segment = 0
+      # Send metadata
+      metadata = {
+        'filename': server.file_path.split('.')[-2],
+        'extension': server.file_path.split('.')[-1]
+      }
+      metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+      is_ack = False
+      server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+      while not is_ack:
+        print("waiting for ack")
+        try:
+          addr, segment = server.listen(2)
+          if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
+            print(f"[Segment SEQ={segment.ack_num-1}] Ack metadata received")
+            is_ack = True
+            sent_segment += 0
+        except socket.timeout:
+          print(f"[Socket timeout] ACK not received")
     while sent_segment < max_segment:
       with self.pause_cond:
         while self.is_paused:
           self.pause_cond.wait()
         to_send = min(conn.send.window_size, max_segment - sent_segment)
         for i in range(to_send):
-          file.seek((sent_segment + i) * MAX_PAYLOAD)
-          print(f"[Segment SEQ={conn.send.seq_num + i}] Sent")
-          server.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num + i, file.read(MAX_PAYLOAD)))
+          file.seek((increment_seqnum(sent_segment, i)) * MAX_PAYLOAD)
+          print(f"[Segment SEQ={increment_seqnum(conn.send.seq_num, i)}] Sent")
+          server.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(increment_seqnum(conn.send.seq_num, i), file.read(MAX_PAYLOAD)))
 
         start_seq_num = conn.send.seq_num
         start_sent_segment = sent_segment
