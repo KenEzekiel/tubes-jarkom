@@ -182,7 +182,7 @@ class Node(ABC):
   
     # ack only, server receive final ack
     elif segment.flags.ack:
-      print(f"[Handshake] Received ACK with ACK NUM [{segment.ack_num}]")
+      print(f"[~] Received ACK with ACK NUM [{segment.ack_num}]")
       if connection is None:  
         return
       # ack for the fin
