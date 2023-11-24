@@ -50,6 +50,7 @@ class Node(ABC):
         print("[Handshake] Timeout, resending syn")
         self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
     if not is_ack:
+      self.connections.pop((ip_remote, port_remote))
       raise HandshakeError()
     
     return new_connection
