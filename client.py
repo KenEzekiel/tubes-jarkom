@@ -33,14 +33,11 @@ class Client(Node):
 
   def handle_message(self, message_info: MessageInfo):
     if self.is_first:
-      metadata_segment, checksum = Segment.from_bytes(message_info.segment.payload)
-      print("checksum", metadata_segment.is_valid_checksum())
-      print(str(metadata_segment))
-      print(metadata_segment.payload.decode())
+      metadata_segment= message_info.segment
       metadata = json.loads(metadata_segment.payload.decode())
-      self.output_path = metadata['filename'] + 'a.' + metadata['extension']
+      self.output_path_filename = metadata['filename']
+      self.output_path_extension = metadata['extension']
       self.is_first = False
-      print(self.output_path, "is now detected")
     else:
       self.data.append(message_info.segment.payload)
     print(f"[Segment SEQ={message_info.segment.seq_num}] Received, Ack sent")
@@ -49,13 +46,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("client_port", type=int)
     parser.add_argument("server_port", type=int)
-    # parser.add_argument("output_path", type=str)
+    parser.add_argument("output_path", type=str)
     args = parser.parse_args()
 
     client = Client('127.0.0.1', args.client_port, "127.0.0.1", args.server_port)
-    # output_path = args.output_path
+    output_path = args.output_path
     client.run()
 
-    with open(client.output_path, "wb") as f:
+    with open(output_path + '.' + client.output_path_extension, "wb") as f:
       for data in client.data:
         f.write(data)

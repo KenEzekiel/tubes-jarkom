@@ -64,8 +64,7 @@ class Segment:
   def metadata(seq_num: int, metadata: dict):
     payload = json.dumps(metadata)
     payload = payload.encode()
-    seg = Segment(SegmentFlags(False, False, False), seq_num, 0, payload.rjust(len(payload)+12, b'\0'))
-    print(str(seg))
+    seg = Segment(SegmentFlags(False, False, False), seq_num, 0, payload)
     return seg
 
   @staticmethod
