@@ -130,9 +130,9 @@ class Server(Node):
             break
 
   # Listening for broadcast request from client
-  def listen_broadcast(self):
+  def listen_broadcast(self, timeout: typing.Optional[bool]=True):
     try:
-      addr, segment, valid_checksum = self.listen_base(5)
+      addr, segment, valid_checksum = self.listen_base(5 if timeout else None)
       if valid_checksum and segment.flags.syn and not segment.flags.ack and addr not in self.listen_addresses:
         self.listen_addresses[addr] = None
         print(f"[!] Received request from {addr[0]}:{addr[1]}")
