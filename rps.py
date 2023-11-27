@@ -64,10 +64,10 @@ class rps(Server):
     while len(self.connections) < 2 and len(self.players_address) < 2:
       addr = None
       try:
-          addr = self.listen_broadcast()
+          addr = self.listen_broadcast(False)
           self.players_address.append(addr)
       except socket.error:
-        print()
+        print("Timeout")
     
     for i in self.players_address:
       print("[!] Waiting for player input")
