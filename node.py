@@ -1,9 +1,12 @@
+import math
+import os
 import socket
-from segment import Segment, SegmentError
+from segment import MAX_PAYLOAD, Segment, SegmentError
 import typing
 from abc import abstractmethod, ABC
-from connection import Connection, generate_seqnum, increment_seqnum
+from connection import Connection, generate_seqnum, get_seqnum_diff, increment_seqnum
 
+# Message info class, describing the ip and port of segment source
 class MessageInfo:
   def __init__(self, ip: str, port: int, segment: Segment) -> None:
     self.ip = ip
@@ -25,13 +28,18 @@ class Node(ABC):
     self.__on_close = None
     self.__on_connect = None
 
+  # Atomic send method
   def send(self, ip_remote: str, port_remote: int, segment: Segment):
     self.__socket.sendto(segment.pack_headers() + segment.payload, (ip_remote, port_remote))
 
+  # Handshake wrapper method, defines the logic of the handshake (init part, sendin syn)
   def handshake(self, ip_remote: str, port_remote: int):
+    # init connection
     new_connection = Connection(self.ip, self.port, ip_remote, port_remote)
     new_connection.send.seq_num = generate_seqnum()
+    # add connection to list of connection
     self.connections[(ip_remote, port_remote)] = new_connection
+    # send syn
     print(f"[Handshake] Sending SYN to {ip_remote}:{port_remote}")
     self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
     # wait for syn ack
@@ -39,31 +47,40 @@ class Node(ABC):
     try_num = 1
     while not is_ack and try_num < 2:
       try:
+        # listen for syn ack
         self.listen(2)
+        # if connected, then set is ack true, because ack is received in the connection
         if new_connection.send.is_connected:
           is_ack = True
       except socket.timeout:
+        # if listen timed out
         if new_connection.send.is_connected:
           is_ack = True
           break
         try_num += 1
+        # try another time for sending syn
         print("[Handshake] Timeout, resending syn")
         self.send(ip_remote, port_remote, Segment.syn(new_connection.send.seq_num))
     if not is_ack:
+      # fail handshake
       self.connections.pop((ip_remote, port_remote))
       raise HandshakeError()
     
     return new_connection
 
+  # Registers a handler, to handle when receiving message
   def register_handler(self, handler: typing.Callable[[MessageInfo], None]):
     self.__handler = handler
   
+  # Registers a protocol to be used when closing a connection
   def register_on_close(self, on_close: typing.Callable[[MessageInfo], None]):
     self.__on_close = on_close
 
+  # Registers a protocol to be used when connecting to a new connection
   def register_on_connect(self, on_connect: typing.Callable[[MessageInfo], None]):
     self.__on_connect = on_connect
 
+  # Listen wrapper, calling on receive here and checking checksum
   def listen(self, timeout: typing.Optional[float] = None):
     try:
       addr, segment, checksum_valid = self.listen_base(timeout)
@@ -71,18 +88,20 @@ class Node(ABC):
         self.__on_receive(addr, segment)
         return addr, segment
       else:
+        # Checksum failed
         print(f"[Segment SEQ={segment.seq_num}] Checksum failed, Ack prev sequence number")
         self.send(addr[0], addr[1], Segment.ack(segment.seq_num))
     except SegmentError as e:
       print(e)
 
+  # Atomic listen, listens to the socket and translate from bytes
   def listen_base(self, timeout: typing.Optional[float] = None):
     self.__socket.settimeout(timeout)
     data, addr = self.__socket.recvfrom(32768)
     segment, checksum_valid = Segment.from_bytes(data)
     return (addr, segment, checksum_valid)
 
-  
+  # Handler for when receiving certain flags (included in handshake algorithm)
   def __on_receive(self, addr: tuple[str, int], segment: Segment):
     connection = self.connections.get((addr[0], addr[1]))
     # syn not ack, server receive connection request
@@ -118,7 +137,6 @@ class Node(ABC):
       if not is_ack:
         raise HandshakeError()
 
-      
     # syn ack, client receive ack of syn from server
     elif segment.flags.syn and segment.flags.ack:
       connection = self.connections.get((addr[0], addr[1]))
@@ -139,6 +157,7 @@ class Node(ABC):
       if self.__on_connect is not None:
         self.__on_connect(MessageInfo(addr[0], addr[1], segment))
 
+    # fin
     elif segment.flags.fin and not segment.flags.ack:
       print(f"[~] Received FIN")
       # cek
@@ -169,7 +188,7 @@ class Node(ABC):
           print("[Termination] Timeout, resending fin ack")
           self.send(addr[0], addr[1], Segment.fin_ack())
     
-      
+    # fin ack
     elif segment.flags.fin and segment.flags.ack:
       self.send(addr[0], addr[1], Segment.ack(0))
       if connection is None or not connection.send.is_connected:
@@ -211,6 +230,7 @@ class Node(ABC):
       if connection is None or not connection.receive.is_connected:
         return
       if self.__handler is not None:
+        # send ack and call the message handler
         connection.receive.seq_num = increment_seqnum(segment.seq_num)
         self.send(addr[0], addr[1], Segment.ack(connection.receive.seq_num))
         self.__handler(MessageInfo(addr[0], addr[1], segment))
@@ -237,4 +257,48 @@ class Node(ABC):
   def handle_message(segment: Segment):
     pass
   
-  
+  def transfer(self, ip: str, port: int, file_path: str):
+    print("Transfer file...")
+    file = open(file_path, "rb")
+    filesize = os.path.getsize(file_path)
+    max_segment = math.ceil(filesize / MAX_PAYLOAD)
+
+    conn = self.connections[(ip, port)]
+    sent_segment = 0
+    # Send metadata
+    metadata = {
+      'filename': file_path.split('.')[-2],
+      'extension': file_path.split('.')[-1]
+    }
+    metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+    is_ack = False
+    self.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+    while sent_segment < max_segment:
+      to_send = min(conn.send.window_size, max_segment - sent_segment)
+      for i in range(to_send):
+        file.seek((sent_segment + i) * MAX_PAYLOAD)
+        print(f"[Segment SEQ={conn.send.seq_num + i}] Sent")
+        self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num + i, file.read(MAX_PAYLOAD)))
+
+      start_seq_num = conn.send.seq_num
+      start_sent_segment = sent_segment
+      i = 0
+      while i < to_send:
+        for i in range(to_send):
+          try:
+            addr, segment = self.listen(5)
+            if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
+              print(f"[Segment SEQ={segment.ack_num-1}] Ack received", end="")
+              diff = get_seqnum_diff(start_seq_num, conn.send.seq_num)
+              if start_sent_segment + diff > sent_segment:
+                print(f", new sequence base = {segment.ack_num}")
+                sent_segment = start_sent_segment + diff
+              else:
+                print()
+              i += 1
+              if diff == to_send:
+                break
+          except socket.timeout:
+            break
+      print(f"[!] Finished sending to {ip}:{port}")
+      self.end_connection(conn.send.remote_ip, conn.send.remote_port)

@@ -10,6 +10,7 @@ import threading
 
 ENABLE_PARALLEL = True
 
+# For parallelization
 class PausableBroadcastThread(threading.Thread):
   def __init__(self, server, addr: tuple[str, int]):
     super().__init__()
@@ -19,6 +20,7 @@ class PausableBroadcastThread(threading.Thread):
     self.is_stopped = False
     self.pause_cond = threading.Condition(threading.Lock())
 
+  # thread run method
   def run(self):
     with self.pause_cond:
       while self.is_paused:
@@ -95,12 +97,13 @@ class PausableBroadcastThread(threading.Thread):
 
 
 class Server(Node):
-  def __init__(self, ip: str, port: int, file_path: str) -> None:
+  def __init__(self, ip: str, port: int, file_path: typing.Optional[str]=None) -> None:
     super().__init__(ip, port)
     self.register_handler(self.handle_message)
     self.listen_addresses: dict[tuple[str, int], typing.Optional[PausableBroadcastThread]] = {}
     self.file_path = file_path
-    self.filesize = os.path.getsize(file_path)
+    if file_path is not None:
+      self.filesize = os.path.getsize(file_path)
   
   def run(self):
     listening = True
@@ -126,6 +129,7 @@ class Server(Node):
         if is_listen_more != "y":
             break
 
+  # Listening for broadcast request from client
   def listen_broadcast(self):
     try:
       addr, segment, valid_checksum = self.listen_base(5)
@@ -149,6 +153,14 @@ class Server(Node):
     for addr in self.listen_addresses:
       conn = self.handshake(addr[0], addr[1])
       sent_segment = 0
+      # Send metadata
+      metadata = {
+        'filename': server.file_path.split('.')[-2],
+        'extension': server.file_path.split('.')[-1]
+      }
+      metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+      is_ack = False
+      server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
       while sent_segment < max_segment:
         to_send = min(conn.send.window_size, max_segment - sent_segment)
         for i in range(to_send):
