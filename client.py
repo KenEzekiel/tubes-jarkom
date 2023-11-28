@@ -61,6 +61,10 @@ class Client(Node):
       self.data.append(message_info.segment.payload)
     print(f"[Segment SEQ={message_info.segment.seq_num}] Received, Ack sent")
 
+ip_alisha = "10.5.105.30"
+ip_ken = '10.5.105.82'
+localhost = '127.0.0.1'
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("client_port", type=int)
@@ -68,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument("output_path", type=str)
     parser.add_argument("peer", type=str)
     args = parser.parse_args()
-    client = Client('127.0.0.1', args.client_port, "127.0.0.1", args.server_port)
+    client = Client(localhost, args.client_port, localhost, args.server_port)
     output_path = args.output_path
     if args.peer == "p2p":
       # send to peer node
@@ -80,8 +84,8 @@ if __name__ == '__main__':
       if args.server_port == args.client_port:
         client.p2p = True
       client.run()
-
-      path = output_path if client.output_path_extension is None else output_path + ('.' + client.output_path_extension)
+      path = "output/"
+      path += output_path if client.output_path_extension is None else output_path + ('.' + client.output_path_extension)
       with open(path, "wb") as f:
         for data in client.data:
           f.write(data)

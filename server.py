@@ -97,6 +97,7 @@ class PausableBroadcastThread(threading.Thread):
 
 class Server(Node):
   def __init__(self, ip: str, port: int, file_path: typing.Optional[str]=None) -> None:
+    file_path = "input/" + file_path
     super().__init__(ip, port)
     self.register_handler(self.handle_message)
     self.listen_addresses: dict[tuple[str, int], typing.Optional[PausableBroadcastThread]] = {}
