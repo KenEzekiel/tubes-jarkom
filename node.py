@@ -267,6 +267,7 @@ class Node(ABC):
   
   def transfer(self, ip: str, port: int, file_path: str):
     print("Transfer file...")
+    file_path = "input/" + file_path
     file = open(file_path, "rb")
     filesize = os.path.getsize(file_path)
     max_segment = math.ceil(filesize / MAX_PAYLOAD)
@@ -319,5 +320,5 @@ class Node(ABC):
           except socket.timeout:
             i = to_send
             break
-      print(f"[!] Finished sending to {ip}:{port}")
-      self.end_connection(conn.send.remote_ip, conn.send.remote_port)
+    print(f"[!] Finished sending to {ip}:{port}")
+    self.end_connection(conn.send.remote_ip, conn.send.remote_port)
