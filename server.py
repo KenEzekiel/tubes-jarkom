@@ -65,7 +65,7 @@ class PausableBroadcastThread(threading.Thread):
         with self.pause_cond:
           while self.is_paused:
             self.pause_cond.wait()
-          for i in range(to_send):
+          for _ in range(to_send):
             try:
               addr, segment = server.listen(5)
               if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
@@ -82,8 +82,8 @@ class PausableBroadcastThread(threading.Thread):
             except socket.timeout:
               i = to_send
               break
-      print(f"[!] Finished sending to {addr[0]}:{addr[1]}")
-      server.end_connection(conn.send.remote_ip, conn.send.remote_port)
+    print(f"[!] Finished sending to {addr[0]}:{addr[1]}")
+    server.end_connection(conn.send.remote_ip, conn.send.remote_port)
 
   def pause(self):
     if not self.is_paused:
@@ -172,7 +172,7 @@ class Server(Node):
         start_sent_segment = sent_segment
         i = 0
         while i < to_send:
-          for i in range(to_send):
+          for _ in range(to_send):
             try:
               addr, segment = self.listen(5)
               if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument("input_path", type=str)
     args = parser.parse_args()
 
-    server = Server('127.0.0.1', args.port, args.input_path)
+    server = Server('172.20.10.7', args.port, args.input_path)
     
     server.run()
     if ENABLE_PARALLEL:

@@ -284,7 +284,7 @@ class Node(ABC):
       start_sent_segment = sent_segment
       i = 0
       while i < to_send:
-        for i in range(to_send):
+        for _ in range(to_send):
           try:
             addr, segment = self.listen(5)
             if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
