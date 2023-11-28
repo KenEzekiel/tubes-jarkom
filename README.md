@@ -2,8 +2,15 @@
 
 ## Table of Contents
 
+- [Tugas Besar Jaringan Komputer](#tugas-besar-jaringan-komputer)
+  - [Table of Contents](#table-of-contents)
+  - [Project Description](#project-description)
+  - [Running the Program](#running-the-program)
+
+
 ## Project Description
 
+This project is a TCP implementation with the UDP protocol, made using python. This projet includes a rock-paper-scissors game, and a peer-to-peer network exchange. This project also supports sending intranet, just by updating the IP address of the host and the target.
 
 ## Running the Program
 
