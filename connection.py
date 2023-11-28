@@ -4,6 +4,8 @@ import random
 import typing
 
 
+WINDOW_SIZE = 5
+
 def generate_seqnum():
   return random.randint(0, 2**32 - 1)
 
@@ -20,7 +22,7 @@ def increment_seqnum(seqnum: int, increment: typing.Optional[int] = None):
 
 def get_seqnum_diff(seqnum_low: int, seqnum_high: int):
   if seqnum_low > seqnum_high:
-    return seqnum_low - seqnum_high
+    return seqnum_high + (0xFFFFFFFF - seqnum_low)
   return seqnum_high - seqnum_low
 
 class ConnectionSend:
@@ -31,8 +33,11 @@ class ConnectionSend:
     self.remote_port = remote_port
     # same as sequence base
     self.seq_num = 0
-    self.window_size = 5
     self.is_connected = False
+
+  @property
+  def window_size(self):
+    return WINDOW_SIZE
 
   @property
   def sequence_max(self):

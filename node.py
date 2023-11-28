@@ -4,7 +4,7 @@ import socket
 from segment import MAX_PAYLOAD, Segment, SegmentError
 import typing
 from abc import abstractmethod, ABC
-from connection import Connection, generate_seqnum, get_seqnum_diff, increment_seqnum
+from connection import WINDOW_SIZE, Connection, generate_seqnum, get_seqnum_diff, increment_seqnum
 
 # Message info class, describing the ip and port of segment source
 class MessageInfo:
@@ -229,12 +229,20 @@ class Node(ABC):
     else:
       if connection is None or not connection.receive.is_connected:
         return
-      if self.__handler is not None:
+
+      # exact sequence numbe
+      if segment.seq_num == connection.receive.seq_num:
         # send ack and call the message handler
         connection.receive.seq_num = increment_seqnum(segment.seq_num)
-        self.send(addr[0], addr[1], Segment.ack(connection.receive.seq_num))
-        self.__handler(MessageInfo(addr[0], addr[1], segment))
-  
+        self.send(addr[0], addr[1], Segment.ack(segment.seq_num))
+        if self.__handler is not None:
+          self.__handler(MessageInfo(addr[0], addr[1], segment))
+        return  
+      
+      # retransmit but ack failed before
+      if get_seqnum_diff(segment.seq_num, connection.receive.seq_num) < WINDOW_SIZE:
+        self.send(addr[0], addr[1], Segment.ack(segment.seq_num))
+        return
   def close(self):
     self.__socket.close()
 
