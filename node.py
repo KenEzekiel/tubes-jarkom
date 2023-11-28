@@ -304,7 +304,7 @@ class Node(ABC):
       while i < to_send:
         for _ in range(to_send):
           try:
-            addr, segment = self.listen(5)
+            addr, segment = self.listen(0.5)
             if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
               print(f"[Segment SEQ={segment.ack_num-1}] Ack received", end="")
               diff = get_seqnum_diff(start_seq_num, conn.send.seq_num)
@@ -317,6 +317,7 @@ class Node(ABC):
               if diff == to_send:
                 break
           except socket.timeout:
+            i = to_send
             break
       print(f"[!] Finished sending to {ip}:{port}")
       self.end_connection(conn.send.remote_ip, conn.send.remote_port)
