@@ -35,17 +35,16 @@ class PausableBroadcastThread(threading.Thread):
         'filename': server.file_path.split('.')[-2],
         'extension': server.file_path.split('.')[-1]
       }
-      metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+      metadata_segment = Segment.metadata(conn.send.seq_num, metadata)
       is_ack = False
-      server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
       while not is_ack:
         print("waiting for ack")
         try:
+          server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
           addr, segment = server.listen(2)
           if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
             print(f"[Segment SEQ={segment.ack_num-1}] Ack metadata received")
             is_ack = True
-            sent_segment += 0
         except socket.timeout:
           print(f"[Socket timeout] ACK not received")
     while sent_segment < max_segment:
@@ -53,12 +52,12 @@ class PausableBroadcastThread(threading.Thread):
         while self.is_paused:
           self.pause_cond.wait()
         to_send = min(conn.send.window_size, max_segment - sent_segment)
+        start_seq_num = conn.send.seq_num
         for i in range(to_send):
           file.seek((increment_seqnum(sent_segment, i)) * MAX_PAYLOAD)
-          print(f"[Segment SEQ={increment_seqnum(conn.send.seq_num, i)}] Sent")
-          server.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(increment_seqnum(conn.send.seq_num, i), file.read(MAX_PAYLOAD)))
+          print(f"[Segment SEQ={increment_seqnum(start_seq_num, i)}] Sent")
+          server.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(increment_seqnum(start_seq_num, i), file.read(MAX_PAYLOAD)))
 
-        start_seq_num = conn.send.seq_num
         start_sent_segment = sent_segment
         i = 0
       while i < to_send:
@@ -158,17 +157,28 @@ class Server(Node):
         'filename': server.file_path.split('.')[-2],
         'extension': server.file_path.split('.')[-1]
       }
-      metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+      metadata_segment = Segment.metadata(conn.send.seq_num, metadata)
       is_ack = False
-      server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+      while not is_ack:
+        print("waiting for ack")
+        try:
+          server.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+          addr, segment = server.listen(2)
+          if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
+            print(f"[Segment SEQ={segment.ack_num-1}] Ack metadata received")
+            is_ack = True
+        except socket.timeout:
+          print(f"[Socket timeout] ACK not received")
+
       while sent_segment < max_segment:
         to_send = min(conn.send.window_size, max_segment - sent_segment)
+        start_seq_num = conn.send.seq_num
+
         for i in range(to_send):
           file.seek((sent_segment + i) * MAX_PAYLOAD)
-          print(f"[Segment SEQ={conn.send.seq_num + i}] Sent")
-          self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num + i, file.read(MAX_PAYLOAD)))
+          print(f"[Segment SEQ={increment_seqnum(start_seq_num, i)}] Sent")
+          self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(increment_seqnum(start_seq_num, i), file.read(MAX_PAYLOAD)))
 
-        start_seq_num = conn.send.seq_num
         start_sent_segment = sent_segment
         i = 0
         while i < to_send:
@@ -204,7 +214,7 @@ if __name__ == '__main__':
     parser.add_argument("input_path", type=str)
     args = parser.parse_args()
 
-    server = Server('172.20.10.7', args.port, args.input_path)
+    server = Server('127.0.0.1', args.port, args.input_path)
     
     server.run()
     if ENABLE_PARALLEL:

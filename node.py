@@ -234,14 +234,14 @@ class Node(ABC):
       if segment.seq_num == connection.receive.seq_num:
         # send ack and call the message handler
         connection.receive.seq_num = increment_seqnum(segment.seq_num)
-        self.send(addr[0], addr[1], Segment.ack(segment.seq_num))
+        self.send(addr[0], addr[1], Segment.ack(increment_seqnum(segment.seq_num)))
         if self.__handler is not None:
           self.__handler(MessageInfo(addr[0], addr[1], segment))
         return  
       
       # retransmit but ack failed before
       if get_seqnum_diff(segment.seq_num, connection.receive.seq_num) < WINDOW_SIZE:
-        self.send(addr[0], addr[1], Segment.ack(segment.seq_num))
+        self.send(addr[0], addr[1], Segment.ack(increment_seqnum(segment.seq_num)))
         return
   def close(self):
     self.__socket.close()
@@ -278,17 +278,27 @@ class Node(ABC):
       'filename': file_path.split('.')[-2],
       'extension': file_path.split('.')[-1]
     }
-    metadata_segment = Segment.metadata(conn.send.seq_num + 1, metadata)
+    metadata_segment = Segment.metadata(conn.send.seq_num, metadata)
     is_ack = False
-    self.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+    while not is_ack:
+      print("waiting for ack")
+      try:
+        self.send(conn.send.remote_ip, conn.send.remote_port, metadata_segment)
+        addr, segment = self.listen(2)
+        if segment is not None and segment.flags.ack and addr == (conn.send.remote_ip, conn.send.remote_port):
+          print(f"[Segment SEQ={segment.ack_num-1}] Ack metadata received")
+          is_ack = True
+      except socket.timeout:
+        print(f"[Socket timeout] ACK not received")
+
     while sent_segment < max_segment:
       to_send = min(conn.send.window_size, max_segment - sent_segment)
+      start_seq_num = conn.send.seq_num
       for i in range(to_send):
         file.seek((sent_segment + i) * MAX_PAYLOAD)
-        print(f"[Segment SEQ={conn.send.seq_num + i}] Sent")
-        self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(conn.send.seq_num + i, file.read(MAX_PAYLOAD)))
+        print(f"[Segment SEQ={increment_seqnum(start_seq_num, i)}] Sent")
+        self.send(conn.send.remote_ip, conn.send.remote_port, Segment.payload(increment_seqnum(start_seq_num, i), file.read(MAX_PAYLOAD)))
 
-      start_seq_num = conn.send.seq_num
       start_sent_segment = sent_segment
       i = 0
       while i < to_send:
